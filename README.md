@@ -61,17 +61,21 @@ Tip: `--goal-mode fixed` (one configuration per task) is a fast way to confirm t
 pipeline can learn at all before the harder randomized-goal setting.
 
 ## 3. Main experiment
+seed 1 first
+```bash
+python run_full_experiment.py --seeds 1 --skip-gate --layer-norm --demo-episodes 10 --warmup 5000 --demo-ratio 0.25 --output results_main
+```
+This trains the baseline, then CMC, through T1 → T2 → T3, then writes the report to results_main\comparison\report.md and the videos.
 
+or run both arms side by side in two terminals: this may take less total time if your machine has spare capacity:
 ```bash
-python run_full_experiment.py --seeds 1 2 3 --skip-gate     # after the gate passed
+python run_experiment.py --no-cmc --seed 1 --layer-norm --demo-episodes 10 --warmup 5000 --demo-ratio 0.25 --output results_main
+python run_experiment.py          --seed 1 --layer-norm --demo-episodes 10 --warmup 5000 --demo-ratio 0.25 --output results_main
+python compare_results.py --results results_main --out-dir results_main\comparison
+python render_all_videos.py --results results_main --seed 1
 ```
-or by hand, per seed:
-```bash
-python run_experiment.py --no-cmc --seed 1    # A) results/before_cmc/seed_1/
-python run_experiment.py          --seed 1    # B) results/after_cmc/seed_1/
-python compare_results.py --results results --out-dir results/comparison
-python render_all_videos.py --results results --seed 1
-```
+
+Use --output results_main, not --tag, so the report can find the result folders.
 
 After every stage, **all tasks learned so far** are evaluated on the same 30 fixed
 episodes per task (identical for both arms and all seeds):
