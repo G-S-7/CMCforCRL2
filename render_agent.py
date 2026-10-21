@@ -82,6 +82,7 @@ def _overlay(frame, lines):
         from PIL import Image, ImageDraw
     except ImportError:
         return frame
+    frame = np.flipud(frame)
     img = Image.fromarray(frame)
     draw = ImageDraw.Draw(img)
     h = 14 * len(lines) + 8
