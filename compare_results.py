@@ -245,6 +245,90 @@ def plot_forgetting(cl_data, seeds, out):
     fig.savefig(out, dpi=180)
     plt.close(fig)
 
+def plot_retention(runs, seeds, out):
+    """
+    Retention = performance after later training / performance immediately
+    after learning. Higher is better (1.0 means no forgetting).
+    """
+    labels = []
+    baseline_mu, baseline_sd = [], []
+    cmc_mu, cmc_sd = [], []
+
+    mets = {
+        arm: per_seed_metrics(runs, arm, seeds, "mean_success")
+        for arm, _ in ARMS
+    }
+
+    for j, tj in enumerate(TASK_LABELS[:-1]):
+        for ti in TASK_LABELS[j + 1:]:
+            key = f"{tj}_after_{ti}"
+            labels.append(f"{tj} after {ti}")
+
+            b_vals = [
+                mets["before_cmc"][s]["retention"].get(key)
+                for s in seeds
+            ]
+            c_vals = [
+                mets["after_cmc"][s]["retention"].get(key)
+                for s in seeds
+            ]
+
+            m, sd, _ = mean_std(b_vals)
+            baseline_mu.append(m)
+            baseline_sd.append(0 if math.isnan(sd) else sd)
+
+            m, sd, _ = mean_std(c_vals)
+            cmc_mu.append(m)
+            cmc_sd.append(0 if math.isnan(sd) else sd)
+
+    x = np.arange(len(labels))
+    w = 0.36
+
+    fig, ax = plt.subplots(figsize=(8, 3.8))
+
+    ax.bar(
+        x - w/2,
+        baseline_mu,
+        w,
+        color=ARM_COLOR["before_cmc"],
+        label="SAC baseline",
+        yerr=baseline_sd if len(seeds) > 1 else None,
+        capsize=3,
+        error_kw={"ecolor": MUTED},
+    )
+
+    ax.bar(
+        x + w/2,
+        cmc_mu,
+        w,
+        color=ARM_COLOR["after_cmc"],
+        label="SAC + CMC",
+        yerr=cmc_sd if len(seeds) > 1 else None,
+        capsize=3,
+        error_kw={"ecolor": MUTED},
+    )
+
+    ax.axhline(1.0, color=MUTED, linestyle="--", linewidth=1)
+    ax.set_xticks(x, labels, fontsize=9)
+    ax.set_ylabel("retention ratio", color=MUTED)
+    ax.set_title(
+        "Retention of earlier tasks (higher is better)",
+        fontsize=11,
+        color=INK,
+        loc="left",
+    )
+
+    ax.set_ylim(0, max(
+        1.05,
+        np.nanmax(baseline_mu + cmc_mu) * 1.15
+    ))
+
+    ax.legend(frameon=False, fontsize=9)
+    _style(ax)
+
+    fig.tight_layout()
+    fig.savefig(out, dpi=180)
+    plt.close(fig)
 
 def plot_curves(runs, seeds, out):
     if not all(runs[arm][s]["curves"] for arm, _ in ARMS for s in seeds):
@@ -340,10 +424,12 @@ def main():
     plot_matrices(runs, seeds, out / "matrix_success.png")
     plot_stage_success(runs, seeds, out / "stage_success.png")
     plot_forgetting(succ_data, seeds, out / "forgetting.png")
+    plot_retention(runs, seeds, out / "retention.png")
     has_curves = plot_curves(runs, seeds, out / "learning_curves.png")
     md += ["## Figures", "", "![matrix](matrix_success.png)", "",
            "![per-task success across stages](stage_success.png)", "",
-           "![forgetting](forgetting.png)", ""]
+           "![forgetting](forgetting.png)", "",
+           "![retention](retention.png)", ""]
     if has_curves:
         md += ["![learning curves](learning_curves.png)", ""]
     if len(seeds) < 3:

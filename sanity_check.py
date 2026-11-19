@@ -349,7 +349,7 @@ def env_checks(render):
                 ok &= good
                 try:
                     import imageio
-                    imageio.imwrite(f"sanity_{task}.png", frame)
+                    imageio.imwrite(f"sanity_{task}.png", np.flip(frame, axis=0))
                 except Exception:  # noqa: BLE001
                     pass
                 renv.close()

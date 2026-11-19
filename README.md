@@ -25,6 +25,7 @@ Headless Linux rendering: `export MUJOCO_GL=egl` (or `osmesa`).
 ```bash
 python sanity_check.py                  # logic checks on a fake env
 python sanity_check.py --env --render   # real tasks: versions, reproducible goals, one frame each
+python check_counterfactual.py          # logic checks for the stronger anchors (section 4)
 python check_expert.py --video          # Meta-World's scripted expert through this code:
                                         # success should be > 0.8 per task; also writes
                                         # videos/expert/*.mp4 showing each task completed
@@ -61,21 +62,17 @@ Tip: `--goal-mode fixed` (one configuration per task) is a fast way to confirm t
 pipeline can learn at all before the harder randomized-goal setting.
 
 ## 3. Main experiment
-seed 1 first
-```bash
-python run_full_experiment.py --seeds 1 --skip-gate --layer-norm --demo-episodes 10 --warmup 5000 --demo-ratio 0.25 --output results_main
-```
-This trains the baseline, then CMC, through T1 → T2 → T3, then writes the report to results_main\comparison\report.md and the videos.
 
-or run both arms side by side in two terminals: this may take less total time if your machine has spare capacity:
 ```bash
-python run_experiment.py --no-cmc --seed 1 --layer-norm --demo-episodes 10 --warmup 5000 --demo-ratio 0.25 --output results_main
-python run_experiment.py          --seed 1 --layer-norm --demo-episodes 10 --warmup 5000 --demo-ratio 0.25 --output results_main
-python compare_results.py --results results_main --out-dir results_main\comparison
-python render_all_videos.py --results results_main --seed 1
+python run_full_experiment.py --seeds 1 2 3 --skip-gate     # after the gate passed
 ```
-
-Use --output results_main, not --tag, so the report can find the result folders.
+or by hand, per seed:
+```bash
+python run_experiment.py --no-cmc --seed 1    # A) results/before_cmc/seed_1/
+python run_experiment.py          --seed 1    # B) results/after_cmc/seed_1/
+python compare_results.py --results results --out-dir results/comparison
+python render_all_videos.py --results results --seed 1
+```
 
 After every stage, **all tasks learned so far** are evaluated on the same 30 fixed
 episodes per task (identical for both arms and all seeds):
@@ -88,6 +85,30 @@ episodes per task (identical for both arms and all seeds):
 
 Forgetting of task j after stage i = success(j after j) − success(j after i).
 
+## 4. Stronger anchors (counterfactual CMC)
+
+The original CMC anchors only the tanh **mean** action (MSE) and ranks memory states
+with a heuristic score (policy noise, Q gap, TD error). Three opt-in options turn this
+into a counterfactual method. The defaults are unchanged, so earlier results reproduce.
+
+| Option | What it does |
+|---|---|
+| `--actor-anchor kl` | anchors the **full action distribution**: KL(π_old ‖ π_new) of the stored pre-tanh Gaussians. tanh + rescale is a bijection, so this is the exact KL of the squashed SAC policies. `--kl-min-log-std` (default −5) floors log-stds for numerical safety. |
+| `--memory-selection counterfactual` | a **frozen copy of the actor at the start of each task** is kept; at consolidation each candidate is scored by `minQ(s, π_new(s)) − minQ(s, π_pre-task(s))`, the task value that would be lost by acting as before the task was learned. |
+| `--cf-refresh-every N` | **frozen copies of each task's critics** are kept at consolidation; every N actor updates on later tasks, memory sampling is re-weighted by the regret `minQ_k(s, a_old) − minQ_k(s, π_now(s))` (exponent `--cf-beta`, uniform floor `--cf-eps`), keeping equal mass per task. The regret trace is saved to `counterfactual_regret.json` and printed as `cfRegret` in the log. |
+
+Run the variants in a **separate results root**, with the baseline there too, so
+`compare_results.py` pairs them; `run_experiment.py` refuses to overwrite a CMC run of a
+different variant:
+```bash
+python run_experiment.py --no-cmc --seed 1 --output results_cf
+python run_experiment.py --seed 1 --output results_cf_1k --actor-anchor kl --memory-selection counterfactual --cf-refresh-every 1000 > log_pri_seed1.txt 2>&1
+python compare_results.py --results results_cf --out-dir results_cf/comparison
+```
+For an ablation, change one option at a time (e.g. `--actor-anchor kl` alone) in its own
+results root. Note that old-critic regret queries Q_k at actions it was not trained on,
+so it is used to rank states within a task, not as an absolute measure of lost return.
+
 ## Outputs
 
 ```
@@ -98,6 +119,7 @@ results/
       results.json               every (stage, task) evaluation
       learning_curves.json       success of all seen tasks during training
       summary.json               new-task learning, retention, forgetting
+      counterfactual_regret.json regret per old task over training (only with --cf-refresh-every)
       checkpoints/stage_T1.pt …  agent after each stage
   comparison/
       report.md  metrics.json  matrix_success.png  stage_success.png
@@ -121,7 +143,11 @@ same episodes used for evaluation, and the checkpoint weights are verified on lo
 | `compare_results.py` | tables and figures, baseline vs CMC |
 | `render_agent.py`, `render_all_videos.py` | videos of the trained policies |
 | `sanity_check.py` | pipeline checks |
+| `check_counterfactual.py` | checks for the KL anchor and counterfactual selection / refresh |
 | `check_expert.py` | scripted expert through this code: verifies env, success and videos |
 | `cmc_rl/tasks.py` | the 3 tasks, reproducible resets, camera |
 | `cmc_rl/networks.py`, `replay.py`, `cmc.py`, `metrics.py` | SAC, buffers, CMC, metrics |
 | `cmc_rl/experts.py` | Meta-World's scripted expert policies for the 3 tasks |
+
+Report what the data shows. If a task is not reliably learned, say so — its
+forgetting numbers are not meaningful.

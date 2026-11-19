@@ -26,6 +26,10 @@ Examples
     # 2) Main experiment (same seed for both arms)
     python run_experiment.py --no-cmc --seed 1      # A) SAC baseline
     python run_experiment.py          --seed 1      # B) SAC + CMC
+
+    # 3) Stronger anchors (write to a separate results root so the main CMC arm is kept)
+    python run_experiment.py --seed 1 --output results_cf --actor-anchor kl \\
+        --memory-selection counterfactual --cf-refresh-every 1000
 """
 
 import os
@@ -46,11 +50,15 @@ from cmc_rl.tasks import (TASK_SEQUENCE, TASK_LABELS, MAX_EPISODE_STEPS,
                           make_env, reset_env, get_env_dict, resolve_name, env_dt)
 from cmc_rl.networks import SACAgent
 from cmc_rl.replay import ReplayBuffer, CMCMemory
-from cmc_rl.cmc import CounterfactualMemoryConsolidator
+from cmc_rl.cmc import CounterfactualMemoryConsolidator, ANCHORS, SELECTIONS
 from cmc_rl.metrics import build_matrix, cl_metrics, fmt
 from cmc_rl.experts import get_expert
 
 EVAL_SEED_BASE = 9_000_000   # evaluation episodes: identical for every run
+
+# CMC settings that define WHICH CMC variant ran (defaults = original CMC).
+CMC_VARIANT_DEFAULTS = {"actor_anchor": "mse", "memory_selection": "priority",
+                        "cf_refresh_every": 0}
 
 
 # ════════════════════════════════════════════════════════════════════ utils
@@ -75,6 +83,22 @@ def eval_episode_seeds(task_name, n):
     """Fixed per-task evaluation episodes, shared by every run and both arms."""
     base = EVAL_SEED_BASE + 10_000 * TASK_SEQUENCE.index(task_name)
     return [base + k for k in range(n)]
+
+
+def cmc_variant(args):
+    return {k: getattr(args, k) for k in CMC_VARIANT_DEFAULTS}
+
+
+def variant_name(args):
+    v = cmc_variant(args)
+    parts = []
+    if v["actor_anchor"] != "mse":
+        parts.append(f"{v['actor_anchor']} anchor")
+    if v["memory_selection"] != "priority":
+        parts.append(f"{v['memory_selection']} selection")
+    if v["cf_refresh_every"]:
+        parts.append(f"cf refresh/{v['cf_refresh_every']}")
+    return ", ".join(parts)
 
 
 def _pkg_version(name):
@@ -336,6 +360,9 @@ def train_one_task(agent, task_name, stage_tasks, stage_idx, args, replay, cmc,
                 alpha_loss.backward()
                 agent.alpha_opt.step()
                 agent.soft_update()
+                if use_mem():
+                    cmc.on_update(agent, device, stage=label,
+                                  step=stage_idx * steps + step + 1)
 
         # ------------------------------------------------------------ logging
         if (step + 1) % args.log_every == 0 or step + 1 == steps:
@@ -346,7 +373,11 @@ def train_one_task(agent, task_name, stage_tasks, stage_idx, args, replay, cmc,
                    f"A={act_v:7.2f} alpha={agent.alpha.item():.4f} unstable={env.n_bad} "
                    f"{sps:.0f} steps/s")
             if use_mem():
-                msg += f" | cmcA={cA_v:.4f} cmcC={cC_v:.2f}"
+                msg += f" | cmc{cmc.actor_anchor.upper()}={cA_v:.4f} cmcC={cC_v:.2f}"
+                if cmc.last_refresh:
+                    msg += " cfRegret " + " ".join(
+                        f"{label_of(stage_tasks[int(t)])}={v['regret_mean']:.2f}"
+                        f"({v['frac_positive']:.0%}>0)" for t, v in cmc.last_refresh.items())
             print(msg, flush=True)
 
         if args.eval_every > 0 and (step + 1) % args.eval_every == 0 and step + 1 < steps:
@@ -369,7 +400,10 @@ def train_one_task(agent, task_name, stage_tasks, stage_idx, args, replay, cmc,
                                     max_candidates=min(args.cmc_candidates, replay.size),
                                     device=device)
         print(f"  [CMC] consolidated {label}: candidates={cons['candidates']} "
-              f"kept={cons['kept']} memory/task={cons['per_task']}")
+              f"kept={cons['kept']} memory/task={cons['per_task']}"
+              + (f" cf_gain_mean={cons['cf_gain_mean']:.2f} "
+                 f"({cons['cf_gain_frac_positive']:.0%} of candidates > 0)"
+                 if "cf_gain_mean" in cons else ""))
     return {"unstable_transitions": n_bad, "consolidation": cons,
             "demo_success": float(np.mean(demo_succ)) if demo_succ else None,
             "train_success_last20": float(np.mean(recent_succ or [0])),
@@ -377,17 +411,32 @@ def train_one_task(agent, task_name, stage_tasks, stage_idx, args, replay, cmc,
 
 
 # ═══════════════════════════════════════════════════════════════ experiment
+def guard_existing_run(out_dir, args):
+    """Refuse to overwrite a CMC run of a DIFFERENT variant in the same folder."""
+    cfg_path = out_dir / "config.json"
+    if args.no_cmc or not cfg_path.exists():
+        return
+    old = json.load(open(cfg_path)).get("args", {})
+    old_v = {k: old.get(k, d) for k, d in CMC_VARIANT_DEFAULTS.items()}
+    if old_v != cmc_variant(args):
+        raise SystemExit(f"{out_dir} holds a CMC run with {old_v}, this run is "
+                         f"{cmc_variant(args)}. Use --output <other root> (or --tag) "
+                         f"so the earlier results are not overwritten.")
+
+
 def run_experiment(args, out_dir, device):
     use_cmc = not args.no_cmc
     stage_tasks = args.tasks
     labels = [label_of(t) for t in stage_tasks]
-    arm = "SAC + CMC" if use_cmc else "SAC baseline (no CMC)"
+    vname = variant_name(args) if use_cmc else ""
+    arm = ("SAC + CMC" + (f" [{vname}]" if vname else "")) if use_cmc else "SAC baseline (no CMC)"
     print(f"\n{'#' * 70}\n  {arm}   seed={args.seed}   tasks={stage_tasks}\n"
           f"  steps/task={args.steps_per_task}  goal_mode={args.goal_mode}  "
           f"eval episodes/task={args.eval_episodes}\n"
           f"  critic LayerNorm={args.layer_norm}  reward_scale={args.reward_scale}  "
           f"demo_episodes={args.demo_episodes}  demo_ratio={args.demo_ratio}\n"
           f"  output: {out_dir}\n{'#' * 70}")
+    guard_existing_run(out_dir, args)
 
     seed_everything(args.seed)
     env_info = environment_report(args.goal_mode)
@@ -402,11 +451,14 @@ def run_experiment(args, out_dir, device):
     cmc = CounterfactualMemoryConsolidator(
         CMCMemory(args.cmc_memory_size if use_cmc else 0, obs_dim, act_dim),
         actor_lambda=args.cmc_actor_lambda, critic_lambda=args.cmc_critic_lambda,
-        selection=args.memory_selection, recent_frac=args.recent_frac, gamma=args.gamma)
+        selection=args.memory_selection, recent_frac=args.recent_frac, gamma=args.gamma,
+        actor_anchor=args.actor_anchor, kl_min_log_std=args.kl_min_log_std,
+        cf_refresh_every=args.cf_refresh_every, cf_beta=args.cf_beta, cf_eps=args.cf_eps)
 
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "checkpoints").mkdir(exist_ok=True)
     _dump({"args": vars(args), "arm": arm, "use_cmc": use_cmc, "labels": labels,
+           "cmc_variant": cmc_variant(args) if use_cmc else None,
            "eval_episode_seeds": {t: eval_episode_seeds(t, args.eval_episodes)
                                   for t in stage_tasks},
            "environment": env_info, "started": time.strftime("%Y-%m-%d %H:%M:%S")},
@@ -416,6 +468,8 @@ def run_experiment(args, out_dir, device):
     for k, task in enumerate(stage_tasks):
         if args.reset_alpha_per_task and k > 0:
             agent.reset_alpha_and_optimizers()
+        if use_cmc:
+            cmc.begin_task(agent, k)       # frozen pre-task actor (counterfactual selection)
         replay = ReplayBuffer(args.replay_size or args.steps_per_task, obs_dim, act_dim)
         stage_info[labels[k]] = train_one_task(agent, task, stage_tasks, k, args, replay,
                                                cmc, use_cmc, device, curve_log)
@@ -434,6 +488,8 @@ def run_experiment(args, out_dir, device):
         _dump(rows, out_dir / "results.json")
         _dump(curve_log, out_dir / "learning_curves.json")
         _dump(stage_info, out_dir / "stage_info.json")
+        if cmc.refresh_log:
+            _dump(cmc.refresh_log, out_dir / "counterfactual_regret.json")
 
     succ = cl_metrics(build_matrix(rows, "mean_success"), labels)
     ret = cl_metrics(build_matrix(rows, "mean_return"), labels)
@@ -472,7 +528,21 @@ def parse_args(argv=None):
     p.add_argument("--cmc-candidates", type=int, default=5_000)
     p.add_argument("--cmc-actor-lambda", type=float, default=1.0)
     p.add_argument("--cmc-critic-lambda", type=float, default=0.25)
-    p.add_argument("--memory-selection", choices=["priority", "uniform"], default="priority")
+    p.add_argument("--memory-selection", choices=list(SELECTIONS), default="priority",
+                   help="priority = heuristic score; uniform = random control; "
+                        "counterfactual = value gain over a frozen pre-task actor")
+    p.add_argument("--actor-anchor", choices=list(ANCHORS), default="mse",
+                   help="mse = anchor tanh mean (original); kl = KL(pi_old||pi_new) "
+                        "over the full action distribution")
+    p.add_argument("--kl-min-log-std", type=float, default=-5.0,
+                   help="log-std floor inside the KL anchor (numerical safety)")
+    p.add_argument("--cf-refresh-every", type=int, default=0,
+                   help="every N actor updates, re-weight memory sampling by the "
+                        "counterfactual regret under frozen old critics (0 = off)")
+    p.add_argument("--cf-beta", type=float, default=1.0,
+                   help="exponent on the regret weights (0 = uniform, larger = sharper)")
+    p.add_argument("--cf-eps", type=float, default=0.1,
+                   help="uniform floor added to normalized regret before the exponent")
     p.add_argument("--recent-frac", type=float, default=0.3)
     p.add_argument("--reset-alpha-per-task", action="store_true")
     p.add_argument("--demo-episodes", type=int, default=0,
@@ -504,6 +574,8 @@ def parse_args(argv=None):
         p.error("--demo-ratio needs --demo-episodes > 0")
     if args.demo_ratio > 0 and args.replay_size and args.replay_size < args.steps_per_task:
         p.error("--demo-ratio needs --replay-size >= --steps-per-task (demos must not be overwritten)")
+    if args.cf_refresh_every < 0 or args.cf_beta < 0 or args.cf_eps < 0:
+        p.error("--cf-refresh-every, --cf-beta and --cf-eps must be >= 0")
     return args
 
 
@@ -525,6 +597,8 @@ def main(argv=None):
         args.steps_per_task, args.warmup = 1500, 300
         args.eval_every, args.curve_episodes, args.eval_episodes = 750, 2, 2
         args.cmc_memory_size, args.log_every = 300, 500
+        if args.cf_refresh_every:
+            args.cf_refresh_every = min(args.cf_refresh_every, 100)
     if args.device == "auto":
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     else:

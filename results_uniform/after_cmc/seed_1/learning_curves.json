@@ -1,0 +1,431 @@
+[
+  {
+    "stage": "T1",
+    "step_in_stage": 25000,
+    "global_step": 25000,
+    "T1": {
+      "success": 0.0,
+      "return": 87.51600913341524
+    }
+  },
+  {
+    "stage": "T1",
+    "step_in_stage": 50000,
+    "global_step": 50000,
+    "T1": {
+      "success": 0.4,
+      "return": 676.3420644946733
+    }
+  },
+  {
+    "stage": "T1",
+    "step_in_stage": 75000,
+    "global_step": 75000,
+    "T1": {
+      "success": 0.6,
+      "return": 2314.6191856907576
+    }
+  },
+  {
+    "stage": "T1",
+    "step_in_stage": 100000,
+    "global_step": 100000,
+    "T1": {
+      "success": 0.7,
+      "return": 1908.9664310897326
+    }
+  },
+  {
+    "stage": "T1",
+    "step_in_stage": 125000,
+    "global_step": 125000,
+    "T1": {
+      "success": 0.6,
+      "return": 2695.7763288473225
+    }
+  },
+  {
+    "stage": "T1",
+    "step_in_stage": 150000,
+    "global_step": 150000,
+    "T1": {
+      "success": 0.8,
+      "return": 2972.506667152159
+    }
+  },
+  {
+    "stage": "T1",
+    "step_in_stage": 175000,
+    "global_step": 175000,
+    "T1": {
+      "success": 0.6,
+      "return": 1932.9768796581993
+    }
+  },
+  {
+    "stage": "T1",
+    "step_in_stage": 200000,
+    "global_step": 200000,
+    "T1": {
+      "success": 0.8,
+      "return": 3335.811218312283
+    }
+  },
+  {
+    "stage": "T1",
+    "step_in_stage": 225000,
+    "global_step": 225000,
+    "T1": {
+      "success": 1.0,
+      "return": 4102.69845175985
+    }
+  },
+  {
+    "stage": "T1",
+    "step_in_stage": 250000,
+    "global_step": 250000,
+    "T1": {
+      "success": 0.7,
+      "return": 2593.9678950335338
+    }
+  },
+  {
+    "stage": "T1",
+    "step_in_stage": 275000,
+    "global_step": 275000,
+    "T1": {
+      "success": 0.9,
+      "return": 3409.695550330187
+    }
+  },
+  {
+    "stage": "T2",
+    "step_in_stage": 25000,
+    "global_step": 325000,
+    "T1": {
+      "success": 0.3,
+      "return": 1414.0772648593725
+    },
+    "T2": {
+      "success": 0.5,
+      "return": 1513.4637595347044
+    }
+  },
+  {
+    "stage": "T2",
+    "step_in_stage": 50000,
+    "global_step": 350000,
+    "T1": {
+      "success": 0.4,
+      "return": 719.0804115731618
+    },
+    "T2": {
+      "success": 0.6,
+      "return": 1276.2803478157307
+    }
+  },
+  {
+    "stage": "T2",
+    "step_in_stage": 75000,
+    "global_step": 375000,
+    "T1": {
+      "success": 0.1,
+      "return": 153.2560565245765
+    },
+    "T2": {
+      "success": 0.6,
+      "return": 1683.210364330146
+    }
+  },
+  {
+    "stage": "T2",
+    "step_in_stage": 100000,
+    "global_step": 400000,
+    "T1": {
+      "success": 0.2,
+      "return": 882.8779526130859
+    },
+    "T2": {
+      "success": 0.9,
+      "return": 3453.050102431824
+    }
+  },
+  {
+    "stage": "T2",
+    "step_in_stage": 125000,
+    "global_step": 425000,
+    "T1": {
+      "success": 0.5,
+      "return": 1739.3579119303122
+    },
+    "T2": {
+      "success": 0.8,
+      "return": 2504.303314778337
+    }
+  },
+  {
+    "stage": "T2",
+    "step_in_stage": 150000,
+    "global_step": 450000,
+    "T1": {
+      "success": 0.7,
+      "return": 1009.3659646848826
+    },
+    "T2": {
+      "success": 1.0,
+      "return": 3468.9945861098686
+    }
+  },
+  {
+    "stage": "T2",
+    "step_in_stage": 175000,
+    "global_step": 475000,
+    "T1": {
+      "success": 0.4,
+      "return": 1599.5733142440681
+    },
+    "T2": {
+      "success": 1.0,
+      "return": 3505.1592410871062
+    }
+  },
+  {
+    "stage": "T2",
+    "step_in_stage": 200000,
+    "global_step": 500000,
+    "T1": {
+      "success": 0.6,
+      "return": 1565.643447279193
+    },
+    "T2": {
+      "success": 0.7,
+      "return": 3129.9803975388413
+    }
+  },
+  {
+    "stage": "T2",
+    "step_in_stage": 225000,
+    "global_step": 525000,
+    "T1": {
+      "success": 0.7,
+      "return": 2128.404515778491
+    },
+    "T2": {
+      "success": 0.7,
+      "return": 2827.121185256415
+    }
+  },
+  {
+    "stage": "T2",
+    "step_in_stage": 250000,
+    "global_step": 550000,
+    "T1": {
+      "success": 0.2,
+      "return": 1499.8633006986558
+    },
+    "T2": {
+      "success": 0.8,
+      "return": 3012.264137386007
+    }
+  },
+  {
+    "stage": "T2",
+    "step_in_stage": 275000,
+    "global_step": 575000,
+    "T1": {
+      "success": 0.7,
+      "return": 2212.294371732229
+    },
+    "T2": {
+      "success": 0.9,
+      "return": 3110.972511826166
+    }
+  },
+  {
+    "stage": "T3",
+    "step_in_stage": 25000,
+    "global_step": 625000,
+    "T1": {
+      "success": 0.2,
+      "return": 1016.638477318683
+    },
+    "T2": {
+      "success": 0.3,
+      "return": 1088.8210219529028
+    },
+    "T3": {
+      "success": 0.0,
+      "return": 0.9625588045534063
+    }
+  },
+  {
+    "stage": "T3",
+    "step_in_stage": 50000,
+    "global_step": 650000,
+    "T1": {
+      "success": 0.2,
+      "return": 548.910762789641
+    },
+    "T2": {
+      "success": 0.2,
+      "return": 1016.9126525427558
+    },
+    "T3": {
+      "success": 0.0,
+      "return": 1.853261801230543
+    }
+  },
+  {
+    "stage": "T3",
+    "step_in_stage": 75000,
+    "global_step": 675000,
+    "T1": {
+      "success": 0.4,
+      "return": 1077.2808197653123
+    },
+    "T2": {
+      "success": 0.3,
+      "return": 1021.1881848644477
+    },
+    "T3": {
+      "success": 0.1,
+      "return": 53.1878127678389
+    }
+  },
+  {
+    "stage": "T3",
+    "step_in_stage": 100000,
+    "global_step": 700000,
+    "T1": {
+      "success": 0.3,
+      "return": 1101.1214224167702
+    },
+    "T2": {
+      "success": 0.3,
+      "return": 1014.9850218908398
+    },
+    "T3": {
+      "success": 0.3,
+      "return": 499.2293128896714
+    }
+  },
+  {
+    "stage": "T3",
+    "step_in_stage": 125000,
+    "global_step": 725000,
+    "T1": {
+      "success": 0.0,
+      "return": 49.3836143433609
+    },
+    "T2": {
+      "success": 0.2,
+      "return": 510.2244122986457
+    },
+    "T3": {
+      "success": 0.2,
+      "return": 313.45432367139693
+    }
+  },
+  {
+    "stage": "T3",
+    "step_in_stage": 150000,
+    "global_step": 750000,
+    "T1": {
+      "success": 0.1,
+      "return": 121.19751148763694
+    },
+    "T2": {
+      "success": 0.5,
+      "return": 1542.1983125389972
+    },
+    "T3": {
+      "success": 0.3,
+      "return": 285.4131707481802
+    }
+  },
+  {
+    "stage": "T3",
+    "step_in_stage": 175000,
+    "global_step": 775000,
+    "T1": {
+      "success": 0.1,
+      "return": 512.1041046358798
+    },
+    "T2": {
+      "success": 0.0,
+      "return": 64.62851974902503
+    },
+    "T3": {
+      "success": 0.2,
+      "return": 661.6495166559442
+    }
+  },
+  {
+    "stage": "T3",
+    "step_in_stage": 200000,
+    "global_step": 800000,
+    "T1": {
+      "success": 0.1,
+      "return": 693.3652148725009
+    },
+    "T2": {
+      "success": 0.3,
+      "return": 1450.3221558912544
+    },
+    "T3": {
+      "success": 0.3,
+      "return": 788.3848552193463
+    }
+  },
+  {
+    "stage": "T3",
+    "step_in_stage": 225000,
+    "global_step": 825000,
+    "T1": {
+      "success": 0.2,
+      "return": 1246.295209108483
+    },
+    "T2": {
+      "success": 0.6,
+      "return": 1980.5980474339449
+    },
+    "T3": {
+      "success": 0.1,
+      "return": 301.6850378038731
+    }
+  },
+  {
+    "stage": "T3",
+    "step_in_stage": 250000,
+    "global_step": 850000,
+    "T1": {
+      "success": 0.4,
+      "return": 1071.952213490897
+    },
+    "T2": {
+      "success": 0.4,
+      "return": 1851.1454131923779
+    },
+    "T3": {
+      "success": 0.2,
+      "return": 635.6594209843522
+    }
+  },
+  {
+    "stage": "T3",
+    "step_in_stage": 275000,
+    "global_step": 875000,
+    "T1": {
+      "success": 0.2,
+      "return": 788.5641698566425
+    },
+    "T2": {
+      "success": 0.3,
+      "return": 1054.1996465892767
+    },
+    "T3": {
+      "success": 0.4,
+      "return": 754.6146340940643
+    }
+  }
+]

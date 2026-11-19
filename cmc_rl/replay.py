@@ -12,6 +12,10 @@ Changes vs. the original:
     compared WITHIN a task, so tasks with large reward/Q scales cannot evict other
     tasks. Sampling is uniform over stored states, which, with equal quotas, is
     balanced across tasks.                                           (FIX 4)
+  * CMCMemory also stores the old policy's pre-tanh Gaussian (old_mean,
+    old_log_std) for the KL anchor, and accepts per-state sampling weights
+    (set_sampling_weights) for counterfactual re-prioritization. Weights are
+    normalized WITHIN each task, so every task keeps its equal share of samples.
 """
 
 import numpy as np
@@ -79,29 +83,42 @@ class ReplayBuffer:
 class CMCMemory:
     """Small protected memory of old-task states with equal per-task quotas."""
 
+    KEYS = ("obs", "old_action", "old_q", "priority", "old_mean", "old_log_std")
+
     def __init__(self, capacity, obs_dim, act_dim):
         self.capacity = int(capacity)
         self.obs_dim = obs_dim
         self.act_dim = act_dim
         self._store = {}   # task_id -> dict of arrays, sorted by priority (desc)
+        self._has_dist = {}
         self._rebuild()
 
     # ---------------------------------------------------------------- storage
-    def add_task(self, task_id, obs, old_action, old_q, priority):
+    def add_task(self, task_id, obs, old_action, old_q, priority,
+                 old_mean=None, old_log_std=None):
         """Store candidates for `task_id`, then rebalance all tasks to equal quotas.
 
         Within each task, the highest-priority states are kept. Priorities of
-        different tasks are never compared.
+        different tasks are never compared. old_mean / old_log_std (pre-tanh
+        Gaussian of the old policy) are optional; the KL anchor needs them.
         """
         if self.capacity <= 0 or len(obs) == 0:
             return 0
+        n = len(obs)
+        has_dist = old_mean is not None and old_log_std is not None
+        if not has_dist:
+            old_mean = np.zeros((n, self.act_dim), np.float32)
+            old_log_std = np.zeros((n, self.act_dim), np.float32)
         order = np.argsort(-np.asarray(priority), kind="stable")
         self._store[int(task_id)] = {
             "obs": np.asarray(obs, np.float32)[order],
             "old_action": np.asarray(old_action, np.float32)[order],
             "old_q": np.asarray(old_q, np.float32)[order],
             "priority": np.asarray(priority, np.float32)[order],
+            "old_mean": np.asarray(old_mean, np.float32)[order],
+            "old_log_std": np.asarray(old_log_std, np.float32)[order],
         }
+        self._has_dist[int(task_id)] = has_dist
         self._rebalance()
         return self.counts_per_task().get(int(task_id), 0)
 
@@ -124,10 +141,8 @@ class CMCMemory:
     def _rebuild(self):
         tids = sorted(self._store)
         if tids:
-            self.obs = np.concatenate([self._store[t]["obs"] for t in tids])
-            self.old_action = np.concatenate([self._store[t]["old_action"] for t in tids])
-            self.old_q = np.concatenate([self._store[t]["old_q"] for t in tids])
-            self.priority = np.concatenate([self._store[t]["priority"] for t in tids])
+            for key in self.KEYS:
+                setattr(self, key, np.concatenate([self._store[t][key] for t in tids]))
             self.task_id = np.concatenate(
                 [np.full(len(self._store[t]["obs"]), t, np.int32) for t in tids])
         else:
@@ -135,20 +150,51 @@ class CMCMemory:
             self.old_action = np.zeros((0, self.act_dim), np.float32)
             self.old_q = np.zeros(0, np.float32)
             self.priority = np.zeros(0, np.float32)
+            self.old_mean = np.zeros((0, self.act_dim), np.float32)
+            self.old_log_std = np.zeros((0, self.act_dim), np.float32)
             self.task_id = np.zeros(0, np.int32)
         self.size = len(self.obs)
+        self._p = None     # layout changed: back to uniform until the next refresh
 
     def counts_per_task(self):
         return {int(t): int(len(d["obs"])) for t, d in self._store.items()}
 
+    @property
+    def has_dist(self):
+        return bool(self._store) and all(self._has_dist.values())
+
+    def set_sampling_weights(self, weights):
+        """Per-state non-negative weights (aligned with self.obs). Normalized
+        within each task so that task t keeps probability mass n_t / size."""
+        w = np.asarray(weights, np.float64)
+        assert w.shape == (self.size,) and np.all(w >= 0) and np.all(np.isfinite(w))
+        p = np.zeros(self.size, np.float64)
+        for tid in np.unique(self.task_id):
+            sel = self.task_id == tid
+            tot = w[sel].sum()
+            share = sel.sum() / self.size
+            p[sel] = share * (w[sel] / tot if tot > 0 else 1.0 / sel.sum())
+        self._p = p / p.sum()
+
     # --------------------------------------------------------------- sampling
-    def sample(self, batch_size, device):
+    def sample(self, batch_size, device, with_dist=False):
         if self.size == 0:
             return None
-        idx = np.random.randint(0, self.size, min(batch_size, self.size))
-        return (
+        k = min(batch_size, self.size)
+        if self._p is None:
+            idx = np.random.randint(0, self.size, k)
+        else:
+            idx = np.random.choice(self.size, k, replace=True, p=self._p)
+        out = (
             torch.as_tensor(self.obs[idx], device=device),
             torch.as_tensor(self.old_action[idx], device=device),
             torch.as_tensor(self.old_q[idx], device=device),
             torch.as_tensor(self.task_id[idx], device=device),
         )
+        if with_dist:
+            if not self.has_dist:
+                raise RuntimeError("KL anchor needs old_mean/old_log_std in memory; "
+                                   "consolidate with the updated cmc.py")
+            out = out + (torch.as_tensor(self.old_mean[idx], device=device),
+                         torch.as_tensor(self.old_log_std[idx], device=device))
+        return out

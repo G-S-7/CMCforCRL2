@@ -1,0 +1,36 @@
+{
+  "T1": {
+    "unstable_transitions": 0,
+    "consolidation": {
+      "candidates": 20000,
+      "kept": 10000,
+      "per_task": {
+        "0": 10000
+      }
+    },
+    "demo_success": 1.0,
+    "train_success_last20": 0.75,
+    "wall_time_s": 18753.104345083237
+  },
+  "T2": {
+    "unstable_transitions": 0,
+    "consolidation": {
+      "candidates": 20000,
+      "kept": 5000,
+      "per_task": {
+        "0": 5000,
+        "1": 5000
+      }
+    },
+    "demo_success": 1.0,
+    "train_success_last20": 0.85,
+    "wall_time_s": 11783.652253627777
+  },
+  "T3": {
+    "unstable_transitions": 0,
+    "consolidation": null,
+    "demo_success": 1.0,
+    "train_success_last20": 0.55,
+    "wall_time_s": 14944.414144992828
+  }
+}
